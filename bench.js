@@ -26,5 +26,5 @@ for(var i=0; i<SIMULATORS.length; ++i) {
       prev = cur
     }
   }
-  console.log(simCons.name + ": " + Math.floor(score*6) + " ticks/hour")
+  console.log(simCons.name + ": " + Math.floor(score*6) + " ticks/minute")
 }

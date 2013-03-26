@@ -18,8 +18,8 @@ Here is the result I got running the benchmark on my machine:
 
 ```
 Starting benchmark...
-BruteForceSimulator: 139 ticks/hour
-NBodyPairsSimulator: 3676 ticks/hour
+BruteForceSimulator: 139 ticks/minute
+NBodyPairsSimulator: 3676 ticks/minute
 ```
 
 (Higher means better)
