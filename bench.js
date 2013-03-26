@@ -1,11 +1,8 @@
-var TOTAL_TIME = 10000
+var TOTAL_TIME = 30000
 var SIZE = 2000
 var RADIUS = 1
 var COUNT = 9001
-var SIMULATORS = [
-  require("./brute-force.js"),
-  require("./nbp.js")
-]
+var SIMULATORS = require("./simulators")
 
 console.log("Starting benchmark...")
 for(var i=0; i<SIMULATORS.length; ++i) {
@@ -26,5 +23,5 @@ for(var i=0; i<SIMULATORS.length; ++i) {
       prev = cur
     }
   }
-  console.log(simCons.name + ": " + Math.floor(score*6) + " ticks/hour")
+  console.log(simCons.name + ": " + Math.floor(score*60000/TOTAL_TIME) + " ticks/minute")
 }

@@ -1,5 +1,5 @@
 var numeric = require("numeric")
-var nbp = require("n-body-pairs")
+var initNBP = require("n-body-pairs")
 
 function NBodyPairsSimulator(n, size, radius) {
   this.colors = numeric.rep([n], 0)
@@ -7,7 +7,8 @@ function NBodyPairsSimulator(n, size, radius) {
   this.radius = radius
   this.points = numeric.mul(size, numeric.random([n, 2]))
   this.velocities = numeric.add(-0.5,numeric.random([n,2]))
-  this.storage = nbp.allocateStorage(n, 2)
+  this.nbp = initNBP(2, n)
+  this.collisions = 0
 }
 
 NBodyPairsSimulator.prototype.step = function() {
@@ -34,9 +35,12 @@ NBodyPairsSimulator.prototype.step = function() {
   
   //Handle collisions
   var colors = this.colors
-  nbp(this.points, radius, function(i,j,d2) {
+  var count = 0
+  this.nbp(this.points, radius, function(i,j,d2) {
     colors[i] = colors[j] = 1
-  }, this.storage)
+    count++
+  })
+  this.collisions = count
 }
 
 module.exports = NBodyPairsSimulator
