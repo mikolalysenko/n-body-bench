@@ -2,12 +2,7 @@
 
 var SIZE = 500
 var RADIUS = 10
-
-var SIMULATORS = [
-  require("./brute-force.js"),
-  require("./nbp.js")
-]
-
+var SIMULATORS = require("./simulators")
 
 var canvas = document.createElement("canvas")
 canvas.width = canvas.height = SIZE
@@ -38,8 +33,12 @@ for(var i=0; i<SIMULATORS.length; ++i) {
 container.appendChild(simSelect)
 simSelect.addEventListener("change", restartSimulator)
 
+var collideDisplay = document.createTextNode("0 collisions")
+container.appendChild(collideDisplay)
+
 var timeDisplay = document.createTextNode("0.0")
 container.appendChild(timeDisplay)
+
 
 function restartSimulator() {
   var sim = SIMULATORS[simSelect.value|0]
@@ -65,7 +64,7 @@ require("raf")(canvas).on("data", function() {
       context.fillStyle = "rgba(255, 255, 255, 0)"
     }
     context.beginPath()
-    context.arc(p[0], p[1], 0.5*RADIUS, 0, 2.0*Math.PI, false)
+    context.arc(p[0], p[1], RADIUS, 0, 2.0*Math.PI, false)
     context.closePath()
     context.fill()
     context.stroke()
@@ -78,8 +77,9 @@ setInterval(function() {
     simulator.step()
     var e = (new Date()) - d
     ftime = 0.9 * ftime + 0.1 * e
+    timeDisplay.nodeValue = ftime + " ms"
+    collideDisplay.nodeValue = simulator.collisions + " collisions"
   }
-  timeDisplay.nodeValue = ftime + " ms"
 }, 1)
 
 restartSimulator()

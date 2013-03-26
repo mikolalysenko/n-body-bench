@@ -6,13 +6,16 @@ function BruteForceSimulator(n, size, radius) {
   this.radius = radius
   this.points = numeric.mul(size, numeric.random([n, 2]))
   this.velocities = numeric.add(-0.5,numeric.random([n,2]))
+  this.collisions = 0
 }
 
 BruteForceSimulator.prototype.step = function() {
   var len = this.points.length
   var size = this.size
   var radius = this.radius
-  var r2 = radius * radius
+  var r2 = 4*radius * radius
+
+  var ncol = 0
 
   //Move points
   for(var i=0; i<len; ++i) {
@@ -42,9 +45,11 @@ BruteForceSimulator.prototype.step = function() {
       }
       if(d2 <= r2) {
         this.colors[i] = this.colors[j] = 1
+        ncol++
       }
     }
   }
+  this.collisions = ncol
 }
 
 module.exports = BruteForceSimulator
