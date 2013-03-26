@@ -1,4 +1,4 @@
-var TOTAL_TIME = 10000
+var TOTAL_TIME = 30000
 var SIZE = 2000
 var RADIUS = 1
 var COUNT = 9001
@@ -23,5 +23,5 @@ for(var i=0; i<SIMULATORS.length; ++i) {
       prev = cur
     }
   }
-  console.log(simCons.name + ": " + Math.floor(score*6) + " ticks/minute")
+  console.log(simCons.name + ": " + Math.floor(score*60000/TOTAL_TIME) + " ticks/minute")
 }
