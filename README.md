@@ -21,3 +21,9 @@ BruteForceSimulator: 139 ticks/hour
 NBodyPairsSimulator: 3676 ticks/hour
 ```
 
+(Higher means better)
+
+
+Credits
+=======
+(c) 2013 Mikola Lysenko. MIT License

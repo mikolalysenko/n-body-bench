@@ -1,0 +1,29 @@
+{
+  "name": "n-body-bench",
+  "version": "0.0.0",
+  "description": "n-body collision detection benchmark",
+  "main": "bench.js",
+  "dependencies": {
+    "numeric": "~1.2.6",
+    "raf": "~0.0.1",
+    "n-body-pairs": "~0.0.1"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/mikolalysenko/n-body-bench.git"
+  },
+  "keywords": [
+    "n-body",
+    "benchmark",
+    "collision",
+    "detection"
+  ],
+  "author": "Mikola Lysenko",
+  "license": "MIT",
+  "readmeFilename": "README.md",
+  "gitHead": "82b9d119b2320b4f8805ec24c74a45739f2ba61a"
+}
