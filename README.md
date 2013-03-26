@@ -2,6 +2,7 @@ n-body-bench
 ============
 Test your collision detection library on a simple benchmark.  Think you can do better?  Fork this library and submit a pull request.  You can also view the demos in your browser!
 
+[http://mikolalysenko.github.com/n-body-bench/](http://mikolalysenko.github.com/n-body-bench/)
 
 Running the Benchmark
 =====================
