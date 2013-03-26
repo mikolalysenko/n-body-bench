@@ -1,14 +1,17 @@
 ;(function(e,t,n,r){function i(r){if(!n[r]){if(!t[r]){if(e)return e(r);throw new Error("Cannot find module '"+r+"'")}var s=n[r]={exports:{}};t[r][0](function(e){var n=t[r][1][e];return i(n?n:e)},s,s.exports)}return n[r].exports}for(var s=0;s<r.length;s++)i(r[s]);return i})(typeof require!=="undefined"&&require,{1:[function(require,module,exports){
+module.exports = [
+  require("./brute-force.js")
+  ,require("./nbp.js")
+  ,require("./mxcif-quadtree.js")
+  //,require("./quadtree-broken.js")
+]
+
+},{"./brute-force.js":2,"./nbp.js":3,"./mxcif-quadtree.js":4}],5:[function(require,module,exports){
 "use strict"
 
 var SIZE = 500
 var RADIUS = 10
-
-var SIMULATORS = [
-  require("./brute-force.js"),
-  require("./nbp.js")
-]
-
+var SIMULATORS = require("./simulators")
 
 var canvas = document.createElement("canvas")
 canvas.width = canvas.height = SIZE
@@ -39,8 +42,12 @@ for(var i=0; i<SIMULATORS.length; ++i) {
 container.appendChild(simSelect)
 simSelect.addEventListener("change", restartSimulator)
 
+var collideDisplay = document.createTextNode("0 collisions")
+container.appendChild(collideDisplay)
+
 var timeDisplay = document.createTextNode("0.0")
 container.appendChild(timeDisplay)
+
 
 function restartSimulator() {
   var sim = SIMULATORS[simSelect.value|0]
@@ -66,7 +73,7 @@ require("raf")(canvas).on("data", function() {
       context.fillStyle = "rgba(255, 255, 255, 0)"
     }
     context.beginPath()
-    context.arc(p[0], p[1], 0.5*RADIUS, 0, 2.0*Math.PI, false)
+    context.arc(p[0], p[1], RADIUS, 0, 2.0*Math.PI, false)
     context.closePath()
     context.fill()
     context.stroke()
@@ -79,12 +86,513 @@ setInterval(function() {
     simulator.step()
     var e = (new Date()) - d
     ftime = 0.9 * ftime + 0.1 * e
+    timeDisplay.nodeValue = ftime + " ms"
+    collideDisplay.nodeValue = simulator.collisions + " collisions"
   }
-  timeDisplay.nodeValue = ftime + " ms"
 }, 1)
 
 restartSimulator()
-},{"./brute-force.js":2,"./nbp.js":3,"raf":4}],4:[function(require,module,exports){
+},{"./simulators":1,"raf":6}],7:[function(require,module,exports){
+/*
+Author: Patrick DeHaan <me@pdehaan.com>
+Brief:  MX-CIF Quadtrees implementation in javascript.
+
+Copyright (c) 2011 Patrick DeHaan
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.
+*/
+var jsQuad = (function() {
+
+var selection = [];
+
+var Node = function(xMin, yMin, xMax, yMax, maxDepth, parent) {
+	this.xMin = xMin;
+	this.yMin = yMin;
+	this.xMax = xMax;
+	this.yMax = yMax;
+	this.x = (xMax+xMin)/2;
+	this.y = (yMax+yMin)/2;
+	this.maxDepth = maxDepth === undefined ? 4 : maxDepth;
+	this.children = [];
+	this.q1 = null;
+	this.q2 = null;
+	this.q3 = null;
+	this.q4 = null;
+	this.parent = parent === undefined ? null : parent;
+};
+
+// It will run this itself, not you.
+var subdivide = function(node, depth) {
+	var xMin = node.xMin, yMin = node.yMin,
+		xMax = node.xMax, yMax = node.yMax,
+		x = node.x, y = node.y;
+	node.q1 = new Node(x, y, xMax, yMax, depth, node);
+	node.q2 = new Node(xMin, y, x, yMax, depth, node);
+	node.q3 = new Node(xMin, yMin, x, y, depth, node);
+	node.q4 = new Node(x, yMin, xMax, y, depth, node);
+};
+
+Node.prototype = {
+	clear: function() {
+		this.children.length = 0;
+		this.q1.clear();
+		this.q2.clear();
+		this.q3.clear();
+		this.q4.clear();
+		this.q1 = null;
+		this.q2 = null;
+		this.q3 = null;
+		this.q4 = null;
+	},
+	insert: function(child) {
+		var node = this;
+		// first establish the object is even in the node. If not, just make
+		// it a child and move on. This
+		if (child.QTenclosed(node.xMin,node.yMin,node.xMax,node.yMax)) {
+			this._insert(child);
+		}
+		
+		// TODO: non-enclosed objects should probably either throw an error or
+		// cause the node to create parents for itself. This solutions keeps
+		// track of the object, but will cause false positives when selection
+		// boundaries enclose the node. Another possible solution is to create
+		// a seperate container for them.
+		else {
+			node.children.push(child);
+			child.QTsetParent(node);
+		}
+	},
+	_insert: function(child) {
+		var node = this;
+		if (node.q1 === null && node.maxDepth > 0) {
+			subdivide(node, node.maxDepth-1);
+		}
+		if (node.q1 !== null) {
+			var q = child.QTquadrantNode(node, node.x, node.y);
+			if (q !== null) {
+				q._insert(child);
+			} else {
+				node.children.push(child);
+				child.QTsetParent(node);
+			}
+		} else {
+			node.children.push(child);
+			child.QTsetParent(node);
+		}
+	},
+	reinsert: function(child) {
+		var parent = child.QTgetParent();
+		parent._remove(child);
+		parent._reinsert(child);
+	},
+	_reinsert: function(child) {
+		if (child.QTenclosed(this.xMin, this.yMin, this.xMax, this.yMax)) {
+			this._insert(child);
+		} else {
+			if (this.parent === null) { return; }
+			this.parent._reinsert(child);
+		}
+	},
+	remove: function(child) {
+		// the child's parent is cached so this doesn't have to search half
+		// the tree
+		child.QTgetParent().remove(child);
+	},
+	_remove: function(child) {
+		// search children to get the index of the child, then splice it out
+		for (var i=0; i<this.children.length;i++) {
+			if (this.children[i] === child) {
+				this.children.splice(i,1);
+			}
+		}
+	},
+	getChildren: function() {
+		selection.length = 0;
+		this.selectChildren();
+		return selection;
+	},
+	selectChildren: function() {
+		// push all children into the list
+		selection.push.apply(selection, this.children);
+		
+		// recurse if there are sub-nodes
+		if (this.q1 !== null) {
+			this.q1.selectChildren();
+			this.q2.selectChildren();
+			this.q3.selectChildren();
+			this.q4.selectChildren();
+		}
+	},
+	getEnclosed: function(xMin, yMin, xMax, yMax) {
+		selection.length = 0;
+		this.selectEnclosed(xMin, yMin, xMax, yMax);
+		return selection;
+	},
+	selectEnclosed: function(xMin, yMin, xMax, yMax) {
+		// move along if there isn't even a boundary overlap
+		if (this.xMax < xMin || this.xMin > xMax || this.yMax < yMin || this.yMin > yMax) {
+			return;
+		}
+		
+		// entire node is enclosed, select everything
+		if (xMin <= this.xMin && xMax >= this.xMax && yMin <= this.yMin && yMax >= this.yMax) {
+			// node is entirely enclosed, select all children
+			this.selectChildren();
+		}
+		// node is partially enclosed, search children and sub-nodes
+		else {
+			// search subnodes if we have them
+			if (this.q1 !== null) {
+				this.q1.selectEnclosed(xMin, yMin, xMax, yMax);
+				this.q2.selectEnclosed(xMin, yMin, xMax, yMax);
+				this.q3.selectEnclosed(xMin, yMin, xMax, yMax);
+				this.q4.selectEnclosed(xMin, yMin, xMax, yMax);
+			}
+			// find enclosed children
+			for (var i=0; i<this.children.length; i++) {
+				if (this.children[i].QTenclosed(xMin, yMin, xMax, yMax)) {
+					selection.push(this.children[i]);
+				}
+			}
+		}
+	},
+	getOverlapping: function(xMin, yMin, xMax, yMax) {
+		selection.length = 0;
+		this.selectOverlapping(xMin, yMin, xMax, yMax);
+		return selection;
+	},
+	selectOverlapping: function(xMin, yMin, xMax, yMax) {
+		// move along if there isn't even a boundary overlap
+		if (this.xMax < xMin || this.xMin > xMax || this.yMax < yMin || this.yMin > yMax) {
+			return;
+		}
+		
+		// entire node is enclosed, select everything
+		if (xMin <= this.xMin && xMax >= this.xMax && yMin <= this.yMin && yMax >= this.yMax) {
+			// node is entirely enclosed, select all children
+			this.selectChildren();
+		}
+		// node is partially enclosed, search children and sub-nodes
+		else {
+			// search subnodes if we have them
+			if (this.q1 !== null) {
+				this.q1.selectOverlapping(xMin, yMin, xMax, yMax);
+				this.q2.selectOverlapping(xMin, yMin, xMax, yMax);
+				this.q3.selectOverlapping(xMin, yMin, xMax, yMax);
+				this.q4.selectOverlapping(xMin, yMin, xMax, yMax);
+			}
+			// find enclosed children
+			for (var i=0; i<this.children.length; i++) {
+				if (this.children[i].QToverlaps(xMin, yMin, xMax, yMax)) {
+					selection.push(this.children[i]);
+				}
+			}
+		}
+	},
+	// TODO: the following methods are basically hacks built on the get methods,
+	// they can run faster. The apply functions in particular should get a boost
+	// by not needing to do list manipulation
+	mapChildren: function(callback) {
+		selection.length = 0;
+		this.selectChildren();
+		var n = selection.length;
+		for (var i=0; i<n; i++) {
+			selection[i] = callback(selection[i]);
+		}
+		return selection;
+	},
+	mapEnclosed: function(xMin, yMin, xMax, yMax, callback) {
+		selection.length = 0;
+		this.selectEnclosed(xMin, yMin, xMax, yMax);
+		var n = selection.length;
+		for (var i=0; i<n; i++) {
+			selection[i] = callback(selection[i]);
+		}
+		return selection;
+	},
+	mapOverlapping: function(xMin, yMin, xMax, yMax, callback) {
+		selection.length = 0;
+		this.selectOverlapping(xMin, yMin, xMax, yMax);
+		var n = selection.length;
+		for (var i=0; i<n; i++) {
+			selection[i] = callback(selection[i]);
+		}
+		return selection;
+	},
+	applyChildren: function(callback) {
+		selection.length = 0;
+		this.selectChildren();
+		var n = selection.length;
+		for (var i=0; i<n; i++) {
+			callback(selection[i]);
+		}
+	},
+	applyEnclosed: function(xMin, yMin, xMax, yMax, callback) {
+		selection.length = 0;
+		this.selectEnclosed(xMin, yMin, xMax, yMax);
+		var n = selection.length;
+		for (var i=0; i<n; i++) {
+			callback(selection[i]);
+		}
+	},
+	applyOverlapping: function(xMin, yMin, xMax, yMax, callback) {
+		selection.length = 0;
+		this.selectOverlapping(xMin, yMin, xMax, yMax);
+		var n = selection.length;
+		for (var i=0; i<n; i++) {
+			callback(selection[i]);
+		}
+	}
+};
+
+return Node; })();
+
+module.exports = jsQuad
+},{}],2:[function(require,module,exports){
+var numeric = require("numeric")
+
+function BruteForceSimulator(n, size, radius) {
+  this.colors = numeric.rep([n], 0)
+  this.size = size
+  this.radius = radius
+  this.points = numeric.mul(size, numeric.random([n, 2]))
+  this.velocities = numeric.add(-0.5,numeric.random([n,2]))
+  this.collisions = 0
+}
+
+BruteForceSimulator.prototype.step = function() {
+  var len = this.points.length
+  var size = this.size
+  var radius = this.radius
+  var r2 = 4*radius * radius
+
+  var ncol = 0
+
+  //Move points
+  for(var i=0; i<len; ++i) {
+    var P = this.points[i]
+    var V = this.velocities[i]
+    for(var j=0; j<2; ++j) {
+      P[j] += V[j] * 2.0
+      if(P[j] < 0) {
+        P[j] = 0
+        V[j] *= -1
+      } else if(P[j] > size) {
+        P[j] = size
+        V[j] *= -1
+      }
+    }
+    this.colors[i] = 0
+  }
+  
+  //Handle collisions
+  for(var i=0; i<len; ++i) {
+    var A = this.points[i]
+    for(var j=0; j<i; ++j) {
+      var B = this.points[j]
+      var d2 = 0.0
+      for(var k=0; k<2; ++k) {
+        d2 += (A[k] - B[k])*(A[k] - B[k])
+      }
+      if(d2 <= r2) {
+        this.colors[i] = this.colors[j] = 1
+        ncol++
+      }
+    }
+  }
+  this.collisions = ncol
+}
+
+module.exports = BruteForceSimulator
+
+},{"numeric":8}],3:[function(require,module,exports){
+var numeric = require("numeric")
+var initNBP = require("n-body-pairs")
+
+function NBodyPairsSimulator(n, size, radius) {
+  this.colors = numeric.rep([n], 0)
+  this.size = size
+  this.radius = radius
+  this.points = numeric.mul(size, numeric.random([n, 2]))
+  this.velocities = numeric.add(-0.5,numeric.random([n,2]))
+  this.nbp = initNBP(2, n)
+  this.collisions = 0
+}
+
+NBodyPairsSimulator.prototype.step = function() {
+  var len = this.points.length
+  var size = this.size
+  var radius = this.radius
+
+  //Move points
+  for(var i=0; i<len; ++i) {
+    var P = this.points[i]
+    var V = this.velocities[i]
+    for(var j=0; j<2; ++j) {
+      P[j] += V[j] * 2.0
+      if(P[j] < 0) {
+        P[j] = 0
+        V[j] *= -1
+      } else if(P[j] > size) {
+        P[j] = size
+        V[j] *= -1
+      }
+    }
+    this.colors[i] = 0
+  }
+  
+  //Handle collisions
+  var colors = this.colors
+  var count = 0
+  this.nbp(this.points, radius, function(i,j,d2) {
+    colors[i] = colors[j] = 1
+    count++
+  })
+  this.collisions = count
+}
+
+module.exports = NBodyPairsSimulator
+
+},{"numeric":8,"n-body-pairs":9}],4:[function(require,module,exports){
+"use strict"
+
+var numeric = require("numeric")
+var jsQuad = require("./src/MXCIFQuadTree")
+
+var Circle = function(x, y, r, id) {
+  this.x = x
+  this.y = y
+  this.r = r
+  this.id = id
+};
+Circle.prototype = {
+  // jsQuad methods
+  QTsetParent: function(parent) {
+    this.QTparent = parent;
+  },
+  QTgetParent: function() {
+    return this.QTparent;
+  },
+  QTenclosed: function(xMin,yMin,xMax,yMax) {
+    var x0 = this.x-this.r, x1 = this.x+this.r;
+    var y0 = this.y-this.r, y1 = this.y+this.r;
+    return x0 >= xMin && x1 <= xMax && y0 >= yMin && y1 <= yMax;
+  },
+  QToverlaps: function(xMin,yMin,xMax,yMax) {
+    var x0 = this.x-this.r, x1 = this.x+this.r;
+    var y0 = this.y-this.r, y1 = this.y+this.r;
+    return !(x1 < xMin || x0 > xMax || y1 < yMin || y0 > yMax);
+  },
+  QTquadrantNode: function(node, x, y) {
+    var x0 = this.x-this.r, x1 = this.x+this.r;
+    if (x0 > x) {
+      var y0 = this.y-this.r, y1 = this.y+this.r;
+      if (y0 > y) {
+        return node.q1;
+      } else if (y1 < y) {
+        return node.q4;
+      } else {
+        return null;
+      }
+    } else if (x1 < x) {
+      var y0 = this.y-this.r, y1 = this.y+this.r;
+      if (y0 > y) {
+        return node.q2;
+      } else if (y1 < y) {
+        return node.q3;
+      } else {
+        return null;
+      }
+    } else {
+      return null;
+    }
+  },
+};
+
+
+function MXCIFQuadTreeSimulator(n, size, radius) {
+  this.colors = numeric.rep([n], 0)
+  this.size = size
+  this.radius = radius
+  this.points = numeric.mul(size, numeric.random([n, 2]))
+  this.velocities = numeric.add(-0.5,numeric.random([n,2]))
+  var qdepth = Math.ceil(Math.log(0.5*size/radius))
+  this.tree = new jsQuad(0, 0, size, size, qdepth)  
+  this.circles = new Array(this.points.length)
+  for(var i=0; i<this.points.length; ++i) {
+    this.circles[i] = new Circle(this.points[i][0], this.points[i][1], radius, i)
+    this.tree.insert(this.circles[i])
+  }
+  this.collisions = 0
+}
+
+MXCIFQuadTreeSimulator.prototype.step = function() {
+  var len = this.points.length
+  var size = this.size
+  var radius = this.radius
+  var r2 = 4*radius * radius
+
+  //Move points
+  for(var i=0; i<len; ++i) {
+    var P = this.points[i]
+    var V = this.velocities[i]
+    for(var j=0; j<2; ++j) {
+      P[j] += V[j] * 2.0
+      if(P[j] < 0) {
+        P[j] = 0
+        V[j] *= -1
+      } else if(P[j] > size) {
+        P[j] = size
+        V[j] *= -1
+      }
+    }
+    this.colors[i] = 0
+    
+    //Update quadtree
+    var C = this.circles[i]
+    C.x = P[0]
+    C.y = P[1]
+    this.tree.reinsert(C)
+  }
+
+  //Check for collisions
+  var ncol = 0
+  var colors = this.colors
+  for(var i=0; i<len; ++i) {
+    var P = this.points[i]
+    this.tree.applyOverlapping(P[0]-radius,P[1]-radius,P[0]+radius,P[1]+radius, function(t) {
+      if (t.id < i) {
+        var dx = P[0] - t.x;
+        var dy = P[1] - t.y;
+        var d2 = dx*dx+dy*dy;
+        if (d2 <= r2) {
+          ncol++
+          colors[i] = colors[t.id] = 1
+        }
+      }
+    })
+  }
+  this.collisions = ncol
+}
+
+module.exports = MXCIFQuadTreeSimulator
+},{"./src/MXCIFQuadTree":7,"numeric":8}],6:[function(require,module,exports){
 (function(){module.exports = raf
 
 var EE = require('events').EventEmitter
@@ -132,446 +640,322 @@ raf.polyfill = _raf
 raf.now = function() { return Date.now() }
 
 })()
-},{"events":5}],2:[function(require,module,exports){
-var numeric = require("numeric")
-
-function BruteForceSimulator(n, size, radius) {
-  this.colors = numeric.rep([n], 0)
-  this.size = size
-  this.radius = radius
-  this.points = numeric.mul(size, numeric.random([n, 2]))
-  this.velocities = numeric.add(-0.5,numeric.random([n,2]))
-}
-
-BruteForceSimulator.prototype.step = function() {
-  var len = this.points.length
-  var size = this.size
-  var radius = this.radius
-  var r2 = radius * radius
-
-  //Move points
-  for(var i=0; i<len; ++i) {
-    var P = this.points[i]
-    var V = this.velocities[i]
-    for(var j=0; j<2; ++j) {
-      P[j] += V[j] * 2.0
-      if(P[j] < 0) {
-        P[j] = 0
-        V[j] *= -1
-      } else if(P[j] > size) {
-        P[j] = size
-        V[j] *= -1
-      }
-    }
-    this.colors[i] = 0
-  }
-  
-  //Handle collisions
-  for(var i=0; i<len; ++i) {
-    var A = this.points[i]
-    for(var j=0; j<i; ++j) {
-      var B = this.points[j]
-      var d2 = 0.0
-      for(var k=0; k<2; ++k) {
-        d2 += (A[k] - B[k])*(A[k] - B[k])
-      }
-      if(d2 <= r2) {
-        this.colors[i] = this.colors[j] = 1
-      }
-    }
-  }
-}
-
-module.exports = BruteForceSimulator
-
-},{"numeric":6}],3:[function(require,module,exports){
-var numeric = require("numeric")
-var nbp = require("n-body-pairs")
-
-function NBodyPairsSimulator(n, size, radius) {
-  this.colors = numeric.rep([n], 0)
-  this.size = size
-  this.radius = radius
-  this.points = numeric.mul(size, numeric.random([n, 2]))
-  this.velocities = numeric.add(-0.5,numeric.random([n,2]))
-  this.storage = nbp.allocateStorage(n, 2)
-}
-
-NBodyPairsSimulator.prototype.step = function() {
-  var len = this.points.length
-  var size = this.size
-  var radius = this.radius
-
-  //Move points
-  for(var i=0; i<len; ++i) {
-    var P = this.points[i]
-    var V = this.velocities[i]
-    for(var j=0; j<2; ++j) {
-      P[j] += V[j] * 2.0
-      if(P[j] < 0) {
-        P[j] = 0
-        V[j] *= -1
-      } else if(P[j] > size) {
-        P[j] = size
-        V[j] *= -1
-      }
-    }
-    this.colors[i] = 0
-  }
-  
-  //Handle collisions
-  var colors = this.colors
-  nbp(this.points, radius, function(i,j,d2) {
-    colors[i] = colors[j] = 1
-  }, this.storage)
-}
-
-module.exports = NBodyPairsSimulator
-
-},{"numeric":6,"n-body-pairs":7}],8:[function(require,module,exports){
-// shim for using process in browser
-
-var process = module.exports = {};
-
-process.nextTick = (function () {
-    var canSetImmediate = typeof window !== 'undefined'
-    && window.setImmediate;
-    var canPost = typeof window !== 'undefined'
-    && window.postMessage && window.addEventListener
-    ;
-
-    if (canSetImmediate) {
-        return function (f) { return window.setImmediate(f) };
-    }
-
-    if (canPost) {
-        var queue = [];
-        window.addEventListener('message', function (ev) {
-            if (ev.source === window && ev.data === 'process-tick') {
-                ev.stopPropagation();
-                if (queue.length > 0) {
-                    var fn = queue.shift();
-                    fn();
-                }
-            }
-        }, true);
-
-        return function nextTick(fn) {
-            queue.push(fn);
-            window.postMessage('process-tick', '*');
-        };
-    }
-
-    return function nextTick(fn) {
-        setTimeout(fn, 0);
-    };
-})();
-
-process.title = 'browser';
-process.browser = true;
-process.env = {};
-process.argv = [];
-
-process.binding = function (name) {
-    throw new Error('process.binding is not supported');
-}
-
-// TODO(shtylman)
-process.cwd = function () { return '/' };
-process.chdir = function (dir) {
-    throw new Error('process.chdir is not supported');
-};
-
-},{}],5:[function(require,module,exports){
-(function(process){if (!process.EventEmitter) process.EventEmitter = function () {};
-
-var EventEmitter = exports.EventEmitter = process.EventEmitter;
-var isArray = typeof Array.isArray === 'function'
-    ? Array.isArray
-    : function (xs) {
-        return Object.prototype.toString.call(xs) === '[object Array]'
-    }
-;
-function indexOf (xs, x) {
-    if (xs.indexOf) return xs.indexOf(x);
-    for (var i = 0; i < xs.length; i++) {
-        if (x === xs[i]) return i;
-    }
-    return -1;
-}
-
-// By default EventEmitters will print a warning if more than
-// 10 listeners are added to it. This is a useful default which
-// helps finding memory leaks.
-//
-// Obviously not all Emitters should be limited to 10. This function allows
-// that to be increased. Set to zero for unlimited.
-var defaultMaxListeners = 10;
-EventEmitter.prototype.setMaxListeners = function(n) {
-  if (!this._events) this._events = {};
-  this._events.maxListeners = n;
-};
-
-
-EventEmitter.prototype.emit = function(type) {
-  // If there is no 'error' event listener then throw.
-  if (type === 'error') {
-    if (!this._events || !this._events.error ||
-        (isArray(this._events.error) && !this._events.error.length))
-    {
-      if (arguments[1] instanceof Error) {
-        throw arguments[1]; // Unhandled 'error' event
-      } else {
-        throw new Error("Uncaught, unspecified 'error' event.");
-      }
-      return false;
-    }
-  }
-
-  if (!this._events) return false;
-  var handler = this._events[type];
-  if (!handler) return false;
-
-  if (typeof handler == 'function') {
-    switch (arguments.length) {
-      // fast cases
-      case 1:
-        handler.call(this);
-        break;
-      case 2:
-        handler.call(this, arguments[1]);
-        break;
-      case 3:
-        handler.call(this, arguments[1], arguments[2]);
-        break;
-      // slower
-      default:
-        var args = Array.prototype.slice.call(arguments, 1);
-        handler.apply(this, args);
-    }
-    return true;
-
-  } else if (isArray(handler)) {
-    var args = Array.prototype.slice.call(arguments, 1);
-
-    var listeners = handler.slice();
-    for (var i = 0, l = listeners.length; i < l; i++) {
-      listeners[i].apply(this, args);
-    }
-    return true;
-
-  } else {
-    return false;
-  }
-};
-
-// EventEmitter is defined in src/node_events.cc
-// EventEmitter.prototype.emit() is also defined there.
-EventEmitter.prototype.addListener = function(type, listener) {
-  if ('function' !== typeof listener) {
-    throw new Error('addListener only takes instances of Function');
-  }
-
-  if (!this._events) this._events = {};
-
-  // To avoid recursion in the case that type == "newListeners"! Before
-  // adding it to the listeners, first emit "newListeners".
-  this.emit('newListener', type, listener);
-
-  if (!this._events[type]) {
-    // Optimize the case of one listener. Don't need the extra array object.
-    this._events[type] = listener;
-  } else if (isArray(this._events[type])) {
-
-    // Check for listener leak
-    if (!this._events[type].warned) {
-      var m;
-      if (this._events.maxListeners !== undefined) {
-        m = this._events.maxListeners;
-      } else {
-        m = defaultMaxListeners;
-      }
-
-      if (m && m > 0 && this._events[type].length > m) {
-        this._events[type].warned = true;
-        console.error('(node) warning: possible EventEmitter memory ' +
-                      'leak detected. %d listeners added. ' +
-                      'Use emitter.setMaxListeners() to increase limit.',
-                      this._events[type].length);
-        console.trace();
-      }
-    }
-
-    // If we've already got an array, just append.
-    this._events[type].push(listener);
-  } else {
-    // Adding the second element, need to change to array.
-    this._events[type] = [this._events[type], listener];
-  }
-
-  return this;
-};
-
-EventEmitter.prototype.on = EventEmitter.prototype.addListener;
-
-EventEmitter.prototype.once = function(type, listener) {
-  var self = this;
-  self.on(type, function g() {
-    self.removeListener(type, g);
-    listener.apply(this, arguments);
-  });
-
-  return this;
-};
-
-EventEmitter.prototype.removeListener = function(type, listener) {
-  if ('function' !== typeof listener) {
-    throw new Error('removeListener only takes instances of Function');
-  }
-
-  // does not use listeners(), so no side effect of creating _events[type]
-  if (!this._events || !this._events[type]) return this;
-
-  var list = this._events[type];
-
-  if (isArray(list)) {
-    var i = indexOf(list, listener);
-    if (i < 0) return this;
-    list.splice(i, 1);
-    if (list.length == 0)
-      delete this._events[type];
-  } else if (this._events[type] === listener) {
-    delete this._events[type];
-  }
-
-  return this;
-};
-
-EventEmitter.prototype.removeAllListeners = function(type) {
-  if (arguments.length === 0) {
-    this._events = {};
-    return this;
-  }
-
-  // does not use listeners(), so no side effect of creating _events[type]
-  if (type && this._events && this._events[type]) this._events[type] = null;
-  return this;
-};
-
-EventEmitter.prototype.listeners = function(type) {
-  if (!this._events) this._events = {};
-  if (!this._events[type]) this._events[type] = [];
-  if (!isArray(this._events[type])) {
-    this._events[type] = [this._events[type]];
-  }
-  return this._events[type];
-};
-
-})(require("__browserify_process"))
-},{"__browserify_process":8}],7:[function(require,module,exports){
+},{"events":10}],9:[function(require,module,exports){
 "use strict"
 
-function allocateGrid(max_points, dimension) {
-  max_points = max_points|0
-  dimension = dimension|0
-  var grid = new Array(max_points<<dimension)
-  for(var i=0, len=grid.length; i<len; ++i) {
-    var g = new Array(dimension+1)
-    for(var j=0; j<=dimension; ++j) {
-      g[j] = 0
-    }
-    grid[i] = g
+function Storage(max_points, dimension) {
+  this.coordinates = new Array(dimension)
+  this.points = new Array(dimension)
+  for(var i=0; i<dimension; ++i) {
+    this.coordinates[i] = new Int32Array(max_points<<dimension)
+    this.points[i] = new Float64Array(max_points<<dimension)
   }
-  return grid
+  this.indices = new Int32Array(max_points<<dimension)
 }
 
-function resizeGrid(grid, max_points, dimension) {
-  if(grid.length > 0) {
-    dimension = (grid[0].length-1)|0
+Storage.prototype.resize = function(max_points) {
+  var dimension = this.coordinates.length
+  for(var i=0; i<dimension; ++i) {
+    this.coordinates[i] = new Int32Array(max_points<<dimension)
+    this.points[i] = new Float64Array(max_points<<dimension)
   }
-  var nlen = max_points<<dimension
-  if(nlen < grid.length) {
-    grid.length = nlen
-  } else {
-    var plen = grid.length
-    grid.length=nlen
-    for(var i=plen; i<nlen; ++i) {
-      var g = new Array(dimension+1)
-      for(var j=0; j<=dimension; ++j) {
-        g[j] = 0
+  this.indices = new Int32Array(max_points<<dimension)
+}
+
+Storage.prototype.size = function() {
+  return this.indices >> this.coordinates.length
+}
+
+Storage.prototype.move = function(p, q) {
+  var coords = this.coordinates
+    , points = this.points
+    , indices = this.indices
+    , dimension = coords.length
+    , a, b, k
+  for(k=0; k<dimension; ++k) {
+    a = coords[k]
+    a[p] = a[q]
+    b = points[k]
+    b[p] = b[q]
+  }
+  indices[p] = indices[q]
+}
+
+Storage.prototype.load = function(scratch, i) {
+  var coords = this.coordinates
+    , points = this.points
+  for(var k=0, d=coords.length; k<d; ++k) {
+    scratch[k] = coords[k][i]|0
+    scratch[k+d+1] = +points[k][i]
+  }
+  scratch[d] = this.indices[i]|0
+}
+
+Storage.prototype.store = function(i, scratch) {
+  var coords = this.coordinates
+    , points = this.points
+  for(var k=0, d=coords.length; k<d; ++k) {
+    coords[k][i] = scratch[k]
+    points[k][i] = scratch[k+d+1]
+  }
+  this.indices[i] = scratch[d]
+}
+
+Storage.prototype.swap = function(i, j) {
+  var coords = this.coordinates
+  var points = this.points
+  var ind = this.indices
+  var t, a, b
+  for(var k=0, d=coords.length; k<d; ++k) {
+    a = coords[k]
+    t = a[i]
+    a[i] = a[j]
+    a[j] = t
+    b = points[k]
+    t = b[i]
+    b[i] = b[j]
+    b[j] = t
+  }
+  t = ind[i]
+  ind[i] = ind[j]
+  ind[j] = t
+}
+
+Storage.prototype.compare = function(i,j) {
+  var coords = this.coordinates
+  for(var k=0, d=coords.length; k<d; ++k) {
+    var a = coords[k]
+      , s = a[i] - a[j]
+    if(s) { return s }
+  }
+  return this.indices[i] - this.indices[j]
+}
+
+Storage.prototype.compareNoId = function(i,j) {
+  var coords = this.coordinates
+  for(var k=0, d=coords.length-1; k<d; ++k) {
+    var a = coords[k]
+      , s = a[i] - a[j]
+    if(s) { return s }
+  }
+  return coords[d][i] - coords[d][j]
+}
+
+Storage.prototype.compareS = function(i, scratch) {
+  var coords = this.coordinates
+  for(var k=0, d=coords.length; k<d; ++k) {
+    var s = coords[k][i] - scratch[k]
+    if(s) { return s }
+  }
+  return this.indices[i] - scratch[d]
+}
+
+/*
+  Modified from this: http://stackoverflow.com/questions/8082425/fastest-way-to-sort-32bit-signed-integer-arrays-in-javascript
+ */
+Storage.prototype.sort = function(n) {
+  var coords = this.coordinates
+  var points = this.points
+  var indices = this.indices
+  var dimension = coords.length|0
+  var stack = []
+  var sp = -1
+  var left = 0
+  var right = n - 1
+  var i, j, k, d, swap = new Array(2*dimension+1), a, b, p, q, t
+  for(i=0; i<dimension; ++i) {
+    swap[i] = 0|0
+  }
+  swap[dimension] = 0|0
+  for(i=0; i<dimension; ++i) {
+    swap[dimension+1+i] = +0.0
+  }
+  while(true) {
+    if(right - left <= 25){
+      for(j=left+1; j<=right; j++) {
+        for(k=0; k<dimension; ++k) {
+          swap[k] = coords[k][j]|0
+          swap[k+dimension+1] = +points[k][j]
+        }
+        swap[dimension] = indices[j]|0
+        i = j-1;        
+lo_loop:
+        while(i >= left) {
+          for(k=0; k<dimension; ++k) {
+            d = coords[k][i] - swap[k]
+            if(d < 0) {
+              break lo_loop
+            } if(d > 0) {
+              break
+            }
+          }
+          p = i+1
+          q = i--
+          for(k=0; k<dimension; ++k) {
+            a = coords[k]
+            a[p] = a[q]
+            b = points[k]
+            b[p] = b[q]
+          }
+          indices[p] = indices[q]
+        }
+        this.store(i+1, swap)
       }
-      grid[i] = g
+      if(sp == -1)    break;
+      right = stack[sp--];
+      left = stack[sp--];
+    } else {
+      var median = (left + right) >> 1;
+      i = left + 1;
+      j = right;
+      
+      this.swap(median, i)
+      if(this.compare(left, right) > 0) {
+        this.swap(left, right)
+      } if(this.compare(i, right) > 0) {
+        this.swap(i, right)
+      } if(this.compare(left, i) > 0) {
+        this.swap(left, i)
+      }
+      
+      this.load(swap, i)
+      while(true){
+ii_loop:
+        while(true) {
+          ++i
+          for(k=0; k<dimension; ++k) {
+            d = coords[k][i] - swap[k]
+            if(d > 0) {
+              break ii_loop
+            } if(d < 0) {
+              continue ii_loop
+            }
+          }
+          if(indices[i] >= swap[dimension]) {
+            break
+          }
+        }
+jj_loop:
+        while(true) {
+          --j
+          for(k=0; k<dimension; ++k) {
+            d = coords[k][j] - swap[k]
+            if(d < 0) {
+              break jj_loop
+            } if(d > 0) {
+              continue jj_loop
+            }
+          }
+          if(indices[j] <= swap[dimension]) {
+            break
+          }
+        }
+        if(j < i)    break;
+        for(k=0; k<dimension; ++k) {
+          a = coords[k]
+          t = a[i]
+          a[i] = a[j]
+          a[j] = t
+          b = points[k]
+          t = b[i]
+          b[i] = b[j]
+          b[j] = t
+        }
+        t = indices[i]
+        indices[i] = indices[j]
+        indices[j] = t
+      }
+      this.move(left+1, j)
+      this.store(j, swap)
+      if(right - i + 1 >= j - left){
+        stack[++sp] = i;
+        stack[++sp] = right;
+        right = j - 1;
+      }else{
+        stack[++sp] = left;
+        stack[++sp] = j - 1;
+        left = i;
+      }
     }
   }
-  return grid
 }
 
-function compareLex(a, b) {
-  for(var i=0, len=a.length-1; i<len; ++i) {
-    var d = a[i] - b[i]
-    if(d) { return d }
-  }
-  return 0
-}
-
-function findPairs_impl(points, count, dimension, radius, cb, grid, compareFun) {
+Storage.prototype.hashPoints = function(points, bucketSize, radius) {
   var floor = Math.floor
-    , dbits = 1<<dimension
+    , coords = this.coordinates
+    , spoints = this.points
+    , indices = this.indices
+    , count = points.length|0
+    , dimension = coords.length|0
+    , dbits = (1<<dimension)|0
     , ptr = 0
   for(var i=0; i<count; ++i) {
-    var c = grid[ptr++]
+    var t = ptr
       , p = points[i]
+      , cross = 0
     for(var j=0; j<dimension; ++j) {
-      c[j] = floor(p[j]/radius)|0
-    }
-    c[dimension]=i
-    for(var j=1; j<dbits; ++j) {
-      var g = grid[ptr++]
-      for(var k=0; k<dimension; ++k) {
-        g[k] = (c[k]+((j>>>k)&1))|0
+      var ix = floor(p[j]/bucketSize)
+      coords[j][ptr] = ix
+      spoints[j][ptr] = p[j]
+      if(bucketSize*(ix+1) <= p[j]+2*radius) {
+        cross += (1<<j)
       }
-      g[dimension]=i
+    }
+    indices[ptr++] = i
+    cross = ~cross
+    for(var j=1; j<dbits; ++j) {
+      if(j & cross) {
+        continue
+      }
+      for(var k=0; k<dimension; ++k) {
+        var c = coords[k]
+        c[ptr] = c[t]+((j>>>k)&1)
+        spoints[k][ptr] = p[k]
+      }
+      indices[ptr++] = i
     }
   }
-  grid.sort(compareFun)
-  var r2 = radius * radius
-  for(var i=0, len=grid.length; i<len; ++i) {
-    var cs = grid[i]
-    var j=i
-j_loop:
-    while(++j < len) {
-      var as = grid[j]
-      for(var k=0; k<dimension; ++k) {
-        if(as[k] !== cs[k]) {
-          break j_loop
-        }
+  return ptr
+}
+
+Storage.prototype.computePairs = function(cellCount, bucketSize, radius, cb) {
+  var floor = Math.floor
+    , coords = this.coordinates
+    , points = this.points
+    , indices = this.indices
+    , dimension = coords.length|0
+    , ptr = 0
+    , r2 = 4 * radius * radius
+    , i, j, k, l
+    , a, b, pa, pb, d, d2, ac, bc
+  for(i=0; i<cellCount;) {
+    for(j=i+1; j<cellCount; ++j) {
+      if(this.compareNoId(i, j) !== 0) {
+        break
       }
-      var a = as[dimension]
-      var pa = points[a]
+      a = indices[j]
 k_loop:
-      for(var k=i; k<j; ++k) {
-        var b = grid[k][dimension]
-        //Check if the coordinate is lexicographically first intersection
-        var pb = points[b]
-        var d2 = 0.0
-        for(var l=0; l<dimension; ++l) {
-          var ac = pa[l]
-          var bc = pb[l]
-          var d = ac - bc
-          if(d >= 0) {
-            if(cs[l] !== (floor(pa[l]/radius)|0)) {
+      for(k=i; k<j; ++k) {
+        b = indices[k]
+        d2 = 0.0
+        for(l=0; l<dimension; ++l) {
+          ac = points[l][j]
+          bc = points[l][k]
+          if(ac > bc) {
+            if(coords[l][i] !== floor(ac/bucketSize)) {
               continue k_loop
             }
-          } else if(cs[l] !== (floor(pb[l]/radius)|0)) {
+          } else if(coords[l][i] !== floor(bc/bucketSize)) {
             continue k_loop
           }
+          d = ac - bc
           d2 += d * d
-        }
-        //Then check if l2 bound holds
-        if(d2 <= r2) {
-          if(cb(a, b, d2)) {
-            return
+          if(d2 > r2) {
+            continue k_loop
           }
+        }
+        if(cb(a, b, d2)) {
+          return
         }
       }
     }
@@ -579,24 +963,38 @@ k_loop:
   }
 }
 
-function findPairs(points, radius, cb, grid) {
-  if(points.length === 0) {
-    return
+function createNBodyDataStructure(dimension, num_points) {
+  dimension = (dimension|0) || 2
+  var grid = new Storage(num_points||1024, dimension)
+  
+  function findPairs(points, radius, cb) {
+    var count = points.length|0
+    var cellCount = count<<dimension
+    if(grid.size() < cellCount) {
+      grid.resize(count)
+    }
+    var bucketSize = 4*radius
+    var nc = grid.hashPoints(points, bucketSize, radius)
+    grid.sort(nc)
+    grid.computePairs(nc, bucketSize, radius, cb)
   }
-  var count = points.length|0
-  var dimension = points[0].length|0
-  if(!grid) {
-    grid = allocateGrid(count, dimension)
-  } else if(grid.length < (count<<dimension)) {
-    reserveGrid(grid, count, dimension)
-  }
-  findPairs_impl(points, count, dimension, radius, cb, grid, compareLex)
+  
+  Object.defineProperty(findPairs, "capacity", {
+    get: function() {
+      return grid.size()
+    },
+    set: function(n_capacity) {
+      grid.resize(n_points)
+      return grid.size()
+    }
+  })
+  
+  return findPairs
 }
 
-module.exports = findPairs
-module.exports.allocateStorage = allocateGrid
-module.exports.resizeStorage = resizeGrid
-},{}],6:[function(require,module,exports){
+module.exports = createNBodyDataStructure
+
+},{}],8:[function(require,module,exports){
 (function(global){"use strict";
 
 var numeric = (typeof exports === "undefined")?(function numeric() {}):(exports);
@@ -5023,5 +5421,245 @@ numeric.svd= function svd(A) {
 
 
 })(window)
-},{}]},{},[1])
+},{}],11:[function(require,module,exports){
+// shim for using process in browser
+
+var process = module.exports = {};
+
+process.nextTick = (function () {
+    var canSetImmediate = typeof window !== 'undefined'
+    && window.setImmediate;
+    var canPost = typeof window !== 'undefined'
+    && window.postMessage && window.addEventListener
+    ;
+
+    if (canSetImmediate) {
+        return function (f) { return window.setImmediate(f) };
+    }
+
+    if (canPost) {
+        var queue = [];
+        window.addEventListener('message', function (ev) {
+            if (ev.source === window && ev.data === 'process-tick') {
+                ev.stopPropagation();
+                if (queue.length > 0) {
+                    var fn = queue.shift();
+                    fn();
+                }
+            }
+        }, true);
+
+        return function nextTick(fn) {
+            queue.push(fn);
+            window.postMessage('process-tick', '*');
+        };
+    }
+
+    return function nextTick(fn) {
+        setTimeout(fn, 0);
+    };
+})();
+
+process.title = 'browser';
+process.browser = true;
+process.env = {};
+process.argv = [];
+
+process.binding = function (name) {
+    throw new Error('process.binding is not supported');
+}
+
+// TODO(shtylman)
+process.cwd = function () { return '/' };
+process.chdir = function (dir) {
+    throw new Error('process.chdir is not supported');
+};
+
+},{}],10:[function(require,module,exports){
+(function(process){if (!process.EventEmitter) process.EventEmitter = function () {};
+
+var EventEmitter = exports.EventEmitter = process.EventEmitter;
+var isArray = typeof Array.isArray === 'function'
+    ? Array.isArray
+    : function (xs) {
+        return Object.prototype.toString.call(xs) === '[object Array]'
+    }
+;
+function indexOf (xs, x) {
+    if (xs.indexOf) return xs.indexOf(x);
+    for (var i = 0; i < xs.length; i++) {
+        if (x === xs[i]) return i;
+    }
+    return -1;
+}
+
+// By default EventEmitters will print a warning if more than
+// 10 listeners are added to it. This is a useful default which
+// helps finding memory leaks.
+//
+// Obviously not all Emitters should be limited to 10. This function allows
+// that to be increased. Set to zero for unlimited.
+var defaultMaxListeners = 10;
+EventEmitter.prototype.setMaxListeners = function(n) {
+  if (!this._events) this._events = {};
+  this._events.maxListeners = n;
+};
+
+
+EventEmitter.prototype.emit = function(type) {
+  // If there is no 'error' event listener then throw.
+  if (type === 'error') {
+    if (!this._events || !this._events.error ||
+        (isArray(this._events.error) && !this._events.error.length))
+    {
+      if (arguments[1] instanceof Error) {
+        throw arguments[1]; // Unhandled 'error' event
+      } else {
+        throw new Error("Uncaught, unspecified 'error' event.");
+      }
+      return false;
+    }
+  }
+
+  if (!this._events) return false;
+  var handler = this._events[type];
+  if (!handler) return false;
+
+  if (typeof handler == 'function') {
+    switch (arguments.length) {
+      // fast cases
+      case 1:
+        handler.call(this);
+        break;
+      case 2:
+        handler.call(this, arguments[1]);
+        break;
+      case 3:
+        handler.call(this, arguments[1], arguments[2]);
+        break;
+      // slower
+      default:
+        var args = Array.prototype.slice.call(arguments, 1);
+        handler.apply(this, args);
+    }
+    return true;
+
+  } else if (isArray(handler)) {
+    var args = Array.prototype.slice.call(arguments, 1);
+
+    var listeners = handler.slice();
+    for (var i = 0, l = listeners.length; i < l; i++) {
+      listeners[i].apply(this, args);
+    }
+    return true;
+
+  } else {
+    return false;
+  }
+};
+
+// EventEmitter is defined in src/node_events.cc
+// EventEmitter.prototype.emit() is also defined there.
+EventEmitter.prototype.addListener = function(type, listener) {
+  if ('function' !== typeof listener) {
+    throw new Error('addListener only takes instances of Function');
+  }
+
+  if (!this._events) this._events = {};
+
+  // To avoid recursion in the case that type == "newListeners"! Before
+  // adding it to the listeners, first emit "newListeners".
+  this.emit('newListener', type, listener);
+
+  if (!this._events[type]) {
+    // Optimize the case of one listener. Don't need the extra array object.
+    this._events[type] = listener;
+  } else if (isArray(this._events[type])) {
+
+    // Check for listener leak
+    if (!this._events[type].warned) {
+      var m;
+      if (this._events.maxListeners !== undefined) {
+        m = this._events.maxListeners;
+      } else {
+        m = defaultMaxListeners;
+      }
+
+      if (m && m > 0 && this._events[type].length > m) {
+        this._events[type].warned = true;
+        console.error('(node) warning: possible EventEmitter memory ' +
+                      'leak detected. %d listeners added. ' +
+                      'Use emitter.setMaxListeners() to increase limit.',
+                      this._events[type].length);
+        console.trace();
+      }
+    }
+
+    // If we've already got an array, just append.
+    this._events[type].push(listener);
+  } else {
+    // Adding the second element, need to change to array.
+    this._events[type] = [this._events[type], listener];
+  }
+
+  return this;
+};
+
+EventEmitter.prototype.on = EventEmitter.prototype.addListener;
+
+EventEmitter.prototype.once = function(type, listener) {
+  var self = this;
+  self.on(type, function g() {
+    self.removeListener(type, g);
+    listener.apply(this, arguments);
+  });
+
+  return this;
+};
+
+EventEmitter.prototype.removeListener = function(type, listener) {
+  if ('function' !== typeof listener) {
+    throw new Error('removeListener only takes instances of Function');
+  }
+
+  // does not use listeners(), so no side effect of creating _events[type]
+  if (!this._events || !this._events[type]) return this;
+
+  var list = this._events[type];
+
+  if (isArray(list)) {
+    var i = indexOf(list, listener);
+    if (i < 0) return this;
+    list.splice(i, 1);
+    if (list.length == 0)
+      delete this._events[type];
+  } else if (this._events[type] === listener) {
+    delete this._events[type];
+  }
+
+  return this;
+};
+
+EventEmitter.prototype.removeAllListeners = function(type) {
+  if (arguments.length === 0) {
+    this._events = {};
+    return this;
+  }
+
+  // does not use listeners(), so no side effect of creating _events[type]
+  if (type && this._events && this._events[type]) this._events[type] = null;
+  return this;
+};
+
+EventEmitter.prototype.listeners = function(type) {
+  if (!this._events) this._events = {};
+  if (!this._events[type]) this._events[type] = [];
+  if (!isArray(this._events[type])) {
+    this._events[type] = [this._events[type]];
+  }
+  return this._events[type];
+};
+
+})(require("__browserify_process"))
+},{"__browserify_process":11}]},{},[5])
 ;
