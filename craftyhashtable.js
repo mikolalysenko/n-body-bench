@@ -2,6 +2,7 @@
 
 var numeric = require("numeric")
 var HashMap = require("./src/CraftyHashTable").HashMap
+var uniq = require("uniq")
 
 function CraftyHashSimulator(n, size, radius) {
   this.colors = numeric.rep([n], 0)
@@ -57,7 +58,12 @@ CraftyHashSimulator.prototype.step = function() {
     var items = grid.search(this.rects[i], false)
     var P = this.points[i]
     for(var j=0, jlen=items.length; j<jlen; ++j) {
-      var b = items[j].id
+      items[j] = items[j].id
+    }
+    items.sort()
+    uniq(items)
+    for(var j=0, jlen = items.length; j<jlen; ++j) {
+      var b = items[j]
       var Q = this.points[b]
       var dx = P[0] - Q[0]
       var dy = P[1] - Q[1]
