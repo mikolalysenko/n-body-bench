@@ -21,7 +21,7 @@ Starting benchmark...
 BruteForceSimulator: 144 ticks/minute
 NBodyPairsSimulator: 7440 ticks/minute
 MXCIFQuadTreeSimulator: 2471 ticks/minute
-CraftyHashSimulator: 3946 ticks/minute
+CraftyHashSimulator: 1458 ticks/minute
 ```
 
 Higher numbers are better.
@@ -34,11 +34,16 @@ Besides brute force, this library the following codes for n-body collision detec
 * [jsQuad](https://github.com/pdehn/jsQuad)
 * [CraftyJS](http://craftyjs.com/)
 
-I also tried to benchmark [Mike Chambers' quad tree library](http://www.mikechambers.com/blog/2011/03/21/javascript-quadtree-implementation/), but it had too many bugs (or perhaps I was not using it correctly?)
-
-Also Crafty's hash table is slightly broken and does not remove duplicates correctly, which is a 
-
 If you want to add your own code to this list, open an issue or send a pull request!
+
+Notes
+=====
+
+* I tried to benchmark [Mike Chambers' quad tree library](http://www.mikechambers.com/blog/2011/03/21/javascript-quadtree-implementation/), but it had too many bugs (or perhaps I was not using it correctly?)
+
+* Crafty's hash table is slightly broken and does not remove duplicates correctly.  To fix this, I had to add in a second pass to remove all the extra pairs.  Without this, it is faster than MXCIFQuadTree by a decent amount.
+
+* MXCIFQuadTree seems to very slightly under report collisions, but it may be I am just using it incorrectly.
 
 Credits
 =======
