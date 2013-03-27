@@ -18,19 +18,21 @@ Here is the result I got running the benchmark on my machine:
 
 ```
 Starting benchmark...
-BruteForceSimulator: 136 ticks/minute
-NBodyPairsSimulator: 7430 ticks/minute
-MXCIFQuadTreeSimulator: 2424 ticks/minute
+BruteForceSimulator: 144 ticks/minute
+NBodyPairsSimulator: 7440 ticks/minute
+MXCIFQuadTreeSimulator: 2471 ticks/minute
+CraftyHashSimulator: 3946 ticks/minute
 ```
 
 Higher numbers are better.
 
 About the Benchmark
 ===================
-Besides brute force, this library currently only compares two libraries for n-body collision detection:
+Besides brute force, this library the following codes for n-body collision detection:
 
 * [n-body-pairs](https://github.com/mikolalysenko/n-body-pairs)
 * [jsQuad](https://github.com/pdehn/jsQuad)
+* [CraftyJS](http://craftyjs.com/)
 
 I also tried to benchmark [Mike Chambers' quad tree library](http://www.mikechambers.com/blog/2011/03/21/javascript-quadtree-implementation/), but it had too many bugs (or perhaps I was not using it correctly?)
 
