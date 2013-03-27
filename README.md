@@ -36,6 +36,8 @@ Besides brute force, this library the following codes for n-body collision detec
 
 I also tried to benchmark [Mike Chambers' quad tree library](http://www.mikechambers.com/blog/2011/03/21/javascript-quadtree-implementation/), but it had too many bugs (or perhaps I was not using it correctly?)
 
+Also Crafty's hash table is slightly broken and does not remove duplicates correctly, which is a 
+
 If you want to add your own code to this list, open an issue or send a pull request!
 
 Credits
