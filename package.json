@@ -6,7 +6,8 @@
   "dependencies": {
     "numeric": "~1.2.6",
     "raf": "~0.0.1",
-    "n-body-pairs": "~0.1.0"
+    "n-body-pairs": "~0.1.0",
+    "jsts": "*"
   },
   "devDependencies": {},
   "scripts": {

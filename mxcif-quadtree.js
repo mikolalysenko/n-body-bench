@@ -54,7 +54,7 @@ Circle.prototype = {
 };
 
 
-function MXCIFQuadTreeSimulator(n, size, radius) {
+function jsQuad_MXCIFQuadTreeSimulator(n, size, radius) {
   this.colors = numeric.rep([n], 0)
   this.size = size
   this.radius = radius
@@ -70,7 +70,7 @@ function MXCIFQuadTreeSimulator(n, size, radius) {
   this.collisions = 0
 }
 
-MXCIFQuadTreeSimulator.prototype.step = function() {
+jsQuad_MXCIFQuadTreeSimulator.prototype.step = function() {
   var len = this.points.length
   var size = this.size
   var radius = this.radius
@@ -119,4 +119,4 @@ MXCIFQuadTreeSimulator.prototype.step = function() {
   this.collisions = ncol
 }
 
-module.exports = MXCIFQuadTreeSimulator
+module.exports = jsQuad_MXCIFQuadTreeSimulator
