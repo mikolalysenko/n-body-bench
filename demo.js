@@ -14,7 +14,7 @@ var ftime = 0.0
 var container = document.createElement("div")
 document.body.appendChild(container)
 var particleCount = document.createElement("select")
-for(var i=50; i<100000; i*=5) {
+for(var i=50; i<20000; i*=5) {
   var opt = document.createElement("option")
   opt.text = i
   opt.value = i

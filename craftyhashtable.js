@@ -4,7 +4,7 @@ var numeric = require("numeric")
 var HashMap = require("./src/CraftyHashTable").HashMap
 var uniq = require("uniq")
 
-function CraftyHashSimulator(n, size, radius) {
+function Crafty_HashSimulator(n, size, radius) {
   this.colors = numeric.rep([n], 0)
   this.size = size
   this.radius = radius
@@ -23,7 +23,7 @@ function CraftyHashSimulator(n, size, radius) {
   this.collisions = 0
 }
 
-CraftyHashSimulator.prototype.step = function() {
+Crafty_HashSimulator.prototype.step = function() {
   var len = this.points.length
   var size = this.size
   var radius = this.radius
@@ -77,4 +77,4 @@ CraftyHashSimulator.prototype.step = function() {
   this.collisions = ncol
 }
 
-module.exports = CraftyHashSimulator
+module.exports = Crafty_HashSimulator
